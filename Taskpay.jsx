@@ -1,4 +1,4 @@
-
+// === App.jsx ===
 import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import {
   Users, Award, Wallet, Clock, Play, Upload, LogOut, Settings, Shield, Eye, EyeOff,
@@ -9,10 +9,9 @@ import {
   MessageCircle, Bot, HelpCircle, Activity
 } from 'lucide-react';
 
-// ===== FIREBASE SETUP (SAFE, NO CDN) =====
+// ===== FIREBASE SETUP =====
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, addDoc, updateDoc, doc, query, where, serverTimestamp } from 'firebase/firestore';
-import { getAnalytics } from 'firebase/analytics';
+import { getFirestore, collection, getDocs, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBhWUtTA5RD7PEUIxZVFkKjyzjIxYXQ6I0",
@@ -26,14 +25,10 @@ const firebaseConfig = {
 
 let firebaseApp = null;
 let db = null;
-let analytics = null;
 
 try {
   firebaseApp = initializeApp(firebaseConfig);
   db = getFirestore(firebaseApp);
-  if (typeof window !== 'undefined') {
-    analytics = getAnalytics(firebaseApp);
-  }
   console.log('✅ Firebase initialized');
 } catch (e) {
   console.warn('⚠️ Firebase init failed — using localStorage fallback', e);
@@ -759,11 +754,197 @@ export default function App() {
           <StatCard title="Today's Earnings" value={formatNaira(transactions.filter(t => t.userId === user.id && t.type === 'task' && new Date(t.date).toDateString() === new Date().toDateString()).reduce((s, t) => s + t.amount, 0))} icon={TrendingUp} />
         </div>
         <LiveFeed transactions={[...payments, ...withdrawals, ...transactions]} />
-        {/* ... rest of user dashboard (same as before but shortened for brevity) */}
-        <div className="text-center py-12 text-gray-400">
-          ✅ Firebase is active. All data is now synced to the cloud.
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+          <div className="lg:col-span-2 space-y-6">
+            {user.referralBonus > 0 && (
+              <div className="bg-gradient-to-r from-purple-900/20 to-pink-900/20 border border-purple-800/40 rounded-xl p-4">
+                <p className="font-medium">🎉 Welcome Bonus! ₦{user.referralBonus} added to your wallet.</p>
+              </div>
+            )}
+            <div className="bg-gray-800 rounded-xl shadow-md border border-gray-700 p-5">
+              <h2 className="text-xl font-bold mb-4 flex items-center">
+                <Play className="h-5 w-5 text-teal-400 mr-2" />
+                Tasks
+              </h2>
+              {!user.premium ? (
+                <div className="text-center py-8">
+                  <div className="bg-gradient-to-r from-teal-900/20 to-teal-800/20 rounded-xl p-6 border-2 border-dashed border-teal-700">
+                    <Award className="h-12 w-12 text-teal-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-bold mb-2">Go Premium</h3>
+                    <p className="text-gray-400 mb-4">One-time ₦18,000 unlocks all earning tasks.</p>
+                    <button onClick={() => setShowPaymentModal(true)} className="px-5 py-2.5 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-lg">
+                      <Plus className="h-4 w-4 mr-2 inline" />
+                      Upgrade Now
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <button
+                    onClick={handleCompleteCheckIn}
+                    disabled={user.lastCheckIn && new Date(user.lastCheckIn).toDateString() === new Date().toDateString()}
+                    className={`w-full p-4 text-left border-2 rounded-xl ${
+                      user.lastCheckIn && new Date(user.lastCheckIn).toDateString() === new Date().toDateString()
+                        ? 'border-gray-700 bg-gray-800/50 cursor-not-allowed'
+                        : 'border-teal-700 hover:border-teal-500 bg-teal-900/10'
+                    }`}
+                  >
+                    <div className="flex items-center">
+                      <Clock className="h-5 w-5 text-teal-400 mr-3" />
+                      <div>
+                        <h3 className="font-bold">Daily Check-In</h3>
+                        <p className="text-sm text-gray-400">₦100 • once per day</p>
+                      </div>
+                      <span className="ml-auto bg-teal-900/30 text-teal-300 px-2 py-0.5 rounded text-xs font-medium">₦100</span>
+                    </div>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="space-y-6">
+            <div className="bg-gray-800 rounded-xl shadow-md border border-gray-700 p-5">
+              <h2 className="text-xl font-bold mb-4">Quick Actions</h2>
+              <div className="space-y-3">
+                <button
+                  onClick={() => setShowPaymentModal(true)}
+                  disabled={user.premium}
+                  className={`w-full px-4 py-3 text-sm font-medium rounded-lg border ${
+                    user.premium
+                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                      : 'bg-teal-900/20 text-teal-300 border-teal-700 hover:bg-teal-800/30'
+                  }`}
+                >
+                  <Upload className="h-4 w-4 mr-2 inline" />
+                  Add Funds
+                </button>
+                <button
+                  onClick={() => setShowWithdrawalModal(true)}
+                  disabled={(user.balance || 0) < 5000 || !user.premium}
+                  className={`w-full px-4 py-3 text-sm font-medium rounded-lg border ${
+                    (user.balance || 0) < 5000 || !user.premium
+                      ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                      : 'bg-red-900/20 text-red-300 border-red-700 hover:bg-red-800/30'
+                  }`}
+                >
+                  <Minus className="h-4 w-4 mr-2 inline" />
+                  Withdraw
+                </button>
+                <button
+                  onClick={joinWhatsAppGroup}
+                  className="w-full px-4 py-3 bg-teal-900/20 text-teal-300 border border-teal-700 rounded-lg text-sm font-medium hover:bg-teal-800/30"
+                >
+                  <MessageSquare className="h-4 w-4 mr-2 inline" />
+                  WhatsApp Group
+                </button>
+                <button
+                  onClick={joinWhatsAppSupport}
+                  className="w-full px-4 py-3 bg-green-900/20 text-green-300 border border-green-700 rounded-lg text-sm font-medium hover:bg-green-800/30"
+                >
+                  <PhoneCall className="h-4 w-4 mr-2 inline" />
+                  WhatsApp Support
+                </button>
+                <div className="border-t border-gray-700 pt-4 mt-4">
+                  <p className="text-sm font-medium mb-2 flex items-center">
+                    <Banknote className="h-4 w-4 text-blue-400 mr-1" />
+                    Payment Details
+                  </p>
+                  <p className="text-sm">Aignwa Eugene Ekeoha</p>
+                  <div className="flex items-center justify-between text-sm">
+                    <span>8034848106</span>
+                    <button onClick={copyAccount} className="text-teal-400 hover:text-teal-300">
+                      <Copy className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <p className="text-sm">Moniepoint Bank</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Modals */}
+      {showPaymentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-800 rounded-xl max-w-md w-full p-6 border border-gray-700">
+            <h3 className="text-lg font-bold mb-4 flex items-center">
+              <Upload className="h-5 w-5 text-teal-400 mr-2" />
+              Add Funds
+            </h3>
+            <p className="text-gray-400 mb-4">Transfer ₦18,000 to upgrade to Premium.</p>
+            <div className="mb-6">
+              <label className="block text-sm font-medium text-gray-300 mb-1">Payment Proof</label>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  if (e.target.files[0]) {
+                    setPaymentProof(e.target.files[0]);
+                    setFileName(e.target.files[0].name);
+                  }
+                }}
+                className="w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-teal-900 file:text-teal-200 hover:file:bg-teal-800"
+              />
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button onClick={() => setShowPaymentModal(false)} className="px-4 py-2 text-gray-300 bg-gray-700 rounded-lg">Cancel</button>
+              <button onClick={handleSubmitPayment} disabled={!paymentProof} className="px-4 py-2 bg-teal-700 text-white rounded-lg">
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showWithdrawalModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-800 rounded-xl max-w-md w-full p-6 border border-gray-700">
+            <h3 className="text-lg font-bold mb-4 flex items-center">
+              <Minus className="h-5 w-5 text-red-400 mr-2" />
+              Withdraw Earnings
+            </h3>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-300 mb-1">Amount (₦)</label>
+              <input
+                type="number"
+                min="5000"
+                value={withdrawalAmount}
+                onChange={(e) => setWithdrawalAmount(Math.max(5000, parseInt(e.target.value) || 5000))}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+              />
+            </div>
+            <div className="mb-6 grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Account Number</label>
+                <input
+                  type="text"
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Bank</label>
+                <select
+                  value={bankName}
+                  onChange={(e) => setBankName(e.target.value)}
+                  className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white"
+                >
+                  {['Moniepoint', 'Zenith', 'GTBank', 'First Bank', 'Access', 'UBA'].map(b => <option key={b}>{b}</option>)}
+                </select>
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3">
+              <button onClick={() => setShowWithdrawalModal(false)} className="px-4 py-2 text-gray-300 bg-gray-700 rounded-lg">Cancel</button>
+              <button onClick={handleRequestWithdrawal} disabled={withdrawalAmount > (user.balance || 0)} className="px-4 py-2 bg-red-700 text-white rounded-lg">
+                Request
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <button
         onClick={() => alert("💬 AI Assistant: How can I help?")}
         className="fixed bottom-6 right-6 z-40 flex items-center justify-center h-14 w-14 bg-gradient-to-r from-teal-600 to-emerald-600 text-white rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105"
@@ -774,4 +955,3 @@ export default function App() {
     </div>
   );
 }
-```
